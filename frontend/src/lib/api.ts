@@ -5,31 +5,97 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface SessionUser {
+  id: string;
+  full_name: string;
+  mobile: string;
+  role: string;
+  caste_category?: string;
+  state?: string;
+  district?: string;
+  block?: string;
+  panchayat?: string;
+}
+
+export const session = {
+  getToken(): string | null {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("token");
+  },
+  setToken(token: string) {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("token", token);
+    }
+  },
+  clear() {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+    }
+  },
+  getUser(): SessionUser | null {
+    if (typeof window === "undefined") return null;
+    const u = localStorage.getItem("user");
+    return u ? JSON.parse(u) : null;
+  },
+  setUser(user: SessionUser) {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("user", JSON.stringify(user));
+    }
+  },
+};
+
+export async function api<T = any>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const token = session.getToken();
+  const headers = new Headers(options.headers || {});
+
+  if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Request failed with status ${res.status}`);
+  }
+
+  return res.json();
+}
+
 /**
  * Ensures a valid session token exists in localStorage using seed credentials.
  */
 export async function ensureDemoToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
-  let token = localStorage.getItem("token");
+  let token = session.getToken();
   if (token) return token;
 
   try {
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mobile: "9000000001",
-        password: "demo1234",
-      }),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      token = data.access_token;
-      if (token) {
-        localStorage.setItem("token", token);
-        return token;
+    const data = await api<{ access_token: string; user?: SessionUser }>(
+      "/auth/login",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          mobile: "9000000001",
+          password: "demo1234",
+        }),
       }
+    );
+
+    if (data.access_token) {
+      session.setToken(data.access_token);
+      if (data.user) session.setUser(data.user);
+      return data.access_token;
     }
   } catch (err) {
     console.error("Auto-login failed:", err);
@@ -44,13 +110,13 @@ export async function askAdvisorStream(
   messages: ChatMessage[],
   onChunk: (chunk: string) => void
 ): Promise<string> {
-  let token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  let token = session.getToken();
   if (!token) {
     token = await ensureDemoToken();
   }
 
-  // Get the latest user query from the conversation
-  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+  const lastUserMsg =
+    [...messages].reverse().find((m) => m.role === "user")?.content || "";
 
   const response = await fetch(`${API_BASE}/agent/chat`, {
     method: "POST",
@@ -63,9 +129,8 @@ export async function askAdvisorStream(
     }),
   });
 
-  // If token expired, clear and retry once
   if (response.status === 401 && typeof window !== "undefined") {
-    localStorage.removeItem("token");
+    session.clear();
     token = await ensureDemoToken();
     const retryRes = await fetch(`${API_BASE}/agent/chat`, {
       method: "POST",
@@ -84,7 +149,11 @@ export async function askAdvisorStream(
     }
 
     const retryData = await retryRes.json();
-    const reply = retryData.reply || retryData.response || retryData.message || JSON.stringify(retryData);
+    const reply =
+      retryData.reply ||
+      retryData.response ||
+      retryData.message ||
+      JSON.stringify(retryData);
     onChunk(reply);
     return reply;
   }
@@ -94,7 +163,6 @@ export async function askAdvisorStream(
     throw new Error(errorData.detail || `Server error (${response.status})`);
   }
 
-  // Handle stream or regular JSON
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("text/event-stream") && response.body) {
     const reader = response.body.getReader();
@@ -112,7 +180,11 @@ export async function askAdvisorStream(
   }
 
   const data = await response.json();
-  const reply = data.reply || data.response || data.message || (typeof data === "string" ? data : JSON.stringify(data));
+  const reply =
+    data.reply ||
+    data.response ||
+    data.message ||
+    (typeof data === "string" ? data : JSON.stringify(data));
   onChunk(reply);
   return reply;
 }
