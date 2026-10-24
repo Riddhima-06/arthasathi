@@ -17,6 +17,11 @@ export interface SessionUser {
   panchayat?: string;
 }
 
+export interface AuthResponse {
+  access_token: string;
+  user: SessionUser;
+}
+
 export const session = {
   getToken(): string | null {
     if (typeof window === "undefined") return null;
@@ -25,12 +30,6 @@ export const session = {
   setToken(token: string) {
     if (typeof window !== "undefined") {
       localStorage.setItem("token", token);
-    }
-  },
-  clear() {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
     }
   },
   getUser(): SessionUser | null {
@@ -43,18 +42,48 @@ export const session = {
       localStorage.setItem("user", JSON.stringify(user));
     }
   },
+  save(data: { access_token: string; user?: SessionUser }) {
+    if (typeof window !== "undefined") {
+      if (data.access_token) localStorage.setItem("token", data.access_token);
+      if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
+    }
+  },
+  clear() {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+    }
+  },
+};
+
+// Allow body to be a plain object/any along with standard BodyInit
+export type CustomRequestInit = Omit<RequestInit, "body"> & {
+  body?: any;
 };
 
 export async function api<T = any>(
   path: string,
-  options: RequestInit = {}
+  options: CustomRequestInit = {}
 ): Promise<T> {
   const token = session.getToken();
   const headers = new Headers(options.headers || {});
 
-  if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json");
+  let reqBody = options.body;
+
+  if (
+    reqBody &&
+    typeof reqBody === "object" &&
+    !(reqBody instanceof FormData) &&
+    !(reqBody instanceof Blob) &&
+    !(reqBody instanceof ArrayBuffer) &&
+    !(reqBody instanceof URLSearchParams)
+  ) {
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    reqBody = JSON.stringify(reqBody);
   }
+
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -62,6 +91,7 @@ export async function api<T = any>(
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
+    body: reqBody,
   });
 
   if (!res.ok) {
@@ -85,16 +115,15 @@ export async function ensureDemoToken(): Promise<string | null> {
       "/auth/login",
       {
         method: "POST",
-        body: JSON.stringify({
+        body: {
           mobile: "9000000001",
           password: "demo1234",
-        }),
+        },
       }
     );
 
     if (data.access_token) {
-      session.setToken(data.access_token);
-      if (data.user) session.setUser(data.user);
+      session.save(data);
       return data.access_token;
     }
   } catch (err) {
