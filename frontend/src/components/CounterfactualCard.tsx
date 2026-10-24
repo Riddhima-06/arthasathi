@@ -23,7 +23,7 @@ export default function CounterfactualCard({ result }: { result: CounterfactualR
 
       {result.recommendations && result.recommendations.length > 0 ? (
         <ul className="mt-3 space-y-2 text-sm text-slate-900">
-          {result.recommendations.map((r) => (
+          {result.recommendations?.map((r: string, idx: number) => (
             <li key={r} className="rounded border border-saffron-600/30 bg-white px-3 py-2">{r}</li>
           ))}
         </ul>
