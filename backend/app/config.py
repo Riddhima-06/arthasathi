@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.0-flash"
     anthropic_api_key: str = ""
     agent_model: str = "claude-sonnet-4-6"
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["*"]
 
 
 settings = Settings()
