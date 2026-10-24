@@ -86,7 +86,7 @@ export default function AdvisorPage() {
         if (updated[lastIdx]?.role === "assistant") {
           updated[lastIdx] = {
             ...updated[lastIdx],
-            text: `Advisory Error: ${err.message || "Failed to reach AI agent."}. Ensure your backend server is active on http://localhost:8000.`,
+            text: `Advisory Error: ${err.message || "Failed to reach AI agent."}. Ensure your backend server is active on https://crazy-rooms-greet.loca.lt.`,
           };
         }
         return updated;
