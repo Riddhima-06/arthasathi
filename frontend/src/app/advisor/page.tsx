@@ -1,212 +1,234 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Mic, Send, Sparkles, ShieldCheck, ChevronDown, Loader2 } from "lucide-react";
+import Shell from "@/components/Shell";
 import { askAdvisorStream, ChatMessage } from "@/lib/api";
+import { Send, Bot, User, Sparkles, ChevronDown, ChevronUp, Mic } from "lucide-react";
 
-interface MessageItem {
+const SUGGESTED_PROMPTS = [
+  "Which scheme fits my margin of ₹12,000?",
+  "Is my DSCR safe?",
+  "How crowded is tailoring in my block?",
+  "What if I cut monthly expenses?",
+];
+
+interface DisplayMessage {
+  id: string;
   role: "user" | "assistant";
-  text: string;
+  content: string;
   derivation?: string;
 }
 
 export default function AdvisorPage() {
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<MessageItem[]>([
+  const [messages, setMessages] = useState<DisplayMessage[]>([
     {
+      id: "initial-msg",
       role: "assistant",
-      text: "Namaste! I am your ArthaSathi financial advisor. Ask about scheme guidelines, monthly debt obligations, or check if your enterprise cash flow can support a new loan.",
-      derivation: "Active policy baseline: NBCFDC Micro Finance Scheme (10% beneficiary margin ceiling, 90% scheme loan, 3-month moratorium).",
+      content:
+        "Namaste! I am your ArthaSathi financial advisor. Ask about scheme guidelines, monthly debt obligations, or check if your enterprise cash flow can support a new loan.",
     },
   ]);
-  const [showDerivationIndex, setShowDerivationIndex] = useState<number | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const samplePrompts = [
-    "Which scheme fits my margin of ₹12,000?",
-    "Is my DSCR safe?",
-    "How crowded is tailoring in my block?",
-    "What if I cut monthly expenses?",
-  ];
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [expandedDerivation, setExpandedDerivation] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    scrollToBottom();
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  const handleSend = async (textToSend?: string) => {
-    const query = (textToSend || input).trim();
-    if (!query || loading) return;
+  const handleSend = async (messageText: string) => {
+    const text = messageText.trim();
+    if (!text || loading) return;
 
+    const userMsgId = `user-${Date.now()}`;
+    const assistantMsgId = `assistant-${Date.now()}`;
+
+    const newMessages: DisplayMessage[] = [
+      ...messages,
+      { id: userMsgId, role: "user", content: text },
+    ];
+
+    setMessages(newMessages);
     setInput("");
     setLoading(true);
 
-    // Append user message immediately
-    const userMessage: MessageItem = { role: "user", text: query };
-    setMessages((prev) => [...prev, userMessage]);
-
-    // Prepare API history
-    const apiHistory: ChatMessage[] = messages.concat(userMessage).map((m) => ({
-      role: m.role,
-      content: m.text,
-    }));
-
-    // Placeholder assistant message for streaming
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "assistant",
-        text: "",
-        derivation: "Statutory Rule Applied: NBCFDC/NSFDC split constraints verified against PostgreSQL backend.",
-      },
-    ]);
+    let streamAccumulator = "";
 
     try {
-      await askAdvisorStream(apiHistory, (chunk) => {
+      const apiPayload: ChatMessage[] = newMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      await askAdvisorStream(apiPayload, (chunk: string) => {
+        streamAccumulator += chunk;
         setMessages((prev) => {
-          const updated = [...prev];
-          const lastIdx = updated.length - 1;
-          if (updated[lastIdx]?.role === "assistant") {
-            updated[lastIdx] = {
-              ...updated[lastIdx],
-              text: updated[lastIdx].text + chunk,
-            };
+          const exists = prev.some((m) => m.id === assistantMsgId);
+          if (exists) {
+            return prev.map((m) =>
+              m.id === assistantMsgId ? { ...m, content: streamAccumulator } : m
+            );
+          } else {
+            return [
+              ...prev,
+              {
+                id: assistantMsgId,
+                role: "assistant",
+                content: streamAccumulator,
+              },
+            ];
           }
-          return updated;
         });
       });
     } catch (err: any) {
-      setMessages((prev) => {
-        const updated = [...prev];
-        const lastIdx = updated.length - 1;
-        if (updated[lastIdx]?.role === "assistant") {
-          updated[lastIdx] = {
-            ...updated[lastIdx],
-            text: `Advisory Error: ${err.message || "Failed to reach AI agent."}. Ensure your backend server is active on https://crazy-rooms-greet.loca.lt.`,
-          };
-        }
-        return updated;
-      });
+      const fallbackError =
+        err?.message ||
+        "Advisory Error: Unable to fetch advice. Please ensure the backend is connected.";
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `error-${Date.now()}`,
+          role: "assistant",
+          content: `Advisory Error: ${fallbackError}`,
+        },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
+  const toggleDerivation = (id: string) => {
+    setExpandedDerivation(expandedDerivation === id ? null : id);
+  };
+
   return (
-    <div className="min-h-full bg-[#0B0C10] text-zinc-100 px-4 sm:px-6 py-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <Shell>
+      <div className="max-w-4xl mx-auto px-4 py-8 flex flex-col h-[calc(100vh-80px)]">
         {/* Header */}
-        <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <div className="mb-4">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 text-xs font-medium mb-3">
             <Sparkles className="w-3.5 h-3.5" />
             Autonomous SIH Financial Copilot
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Financial Advisor</h1>
-          <p className="text-zinc-400 text-sm max-w-2xl">
+          <h1 className="text-3xl font-bold text-white tracking-tight">Financial Advisor</h1>
+          <p className="text-gray-400 text-sm mt-1">
             Ask questions regarding scheme rules, repayment calculations, or debt viability. Click any suggested prompt to begin.
           </p>
         </div>
 
-        {/* Suggestion Chips */}
-        <div className="flex flex-wrap gap-2 pt-1">
-          {samplePrompts.map((prompt, idx) => (
+        {/* Suggested Prompts */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {SUGGESTED_PROMPTS.map((prompt, idx) => (
             <button
               key={idx}
               onClick={() => handleSend(prompt)}
               disabled={loading}
-              className="text-xs px-3.5 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-emerald-500/50 hover:text-emerald-400 transition-all text-left disabled:opacity-50"
+              className="text-xs bg-[#161b22] hover:bg-[#21262d] text-gray-300 border border-gray-800 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50"
             >
               {prompt}
             </button>
           ))}
         </div>
 
-        {/* Chat / Terminal Window */}
-        <div className="rounded-2xl border border-white/10 bg-zinc-900/60 backdrop-blur-xl shadow-2xl flex flex-col h-[520px]">
-          {/* Feed */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {messages.map((m, i) => (
+        {/* Chat Messages Container */}
+        <div className="flex-1 overflow-y-auto space-y-4 pr-2 rounded-xl bg-[#0d1117] border border-gray-800/80 p-4 shadow-inner">
+          {messages.map((m) => (
+            <div
+              key={m.id}
+              className={`flex flex-col ${
+                m.role === "user" ? "items-end" : "items-start"
+              }`}
+            >
               <div
-                key={i}
-                className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}
+                className={`flex gap-3 max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                  m.role === "user"
+                    ? "bg-emerald-600 text-white rounded-br-none shadow-md"
+                    : "bg-[#1c2128] text-gray-200 border border-gray-800 rounded-bl-none"
+                }`}
               >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-                    m.role === "user"
-                      ? "bg-emerald-500 text-zinc-950 font-semibold shadow-md shadow-emerald-500/10"
-                      : "bg-zinc-800/80 border border-white/10 text-zinc-200"
-                  }`}
-                >
-                  {m.text || (loading && i === messages.length - 1 ? "Thinking..." : "")}
-                </div>
-
-                {m.derivation && m.text && (
-                  <div className="mt-2 text-xs">
-                    <button
-                      onClick={() =>
-                        setShowDerivationIndex(showDerivationIndex === i ? null : i)
-                      }
-                      className="flex items-center gap-1 text-zinc-500 hover:text-emerald-400 transition-colors"
-                    >
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 transition-transform ${
-                          showDerivationIndex === i ? "rotate-180" : ""
-                        }`}
-                      />
-                      Show statutory derivation
-                    </button>
-                    {showDerivationIndex === i && (
-                      <div className="mt-1.5 p-2.5 rounded-lg bg-black/50 border border-white/5 font-mono text-[11px] text-zinc-400 max-w-[85%]">
-                        {m.derivation}
-                      </div>
-                    )}
-                  </div>
+                {m.role === "assistant" && (
+                  <Bot className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
+                )}
+                <div className="whitespace-pre-wrap">{m.content}</div>
+                {m.role === "user" && (
+                  <User className="w-5 h-5 text-emerald-100 mt-0.5 shrink-0" />
                 )}
               </div>
-            ))}
-            <div ref={messagesEndRef} />
+
+              {/* Statutory Derivation Accordion (Advisor messages only) */}
+              {m.role === "assistant" && (
+                <div className="mt-1 ml-2">
+                  <button
+                    onClick={() => toggleDerivation(m.id)}
+                    className="inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-400 transition-colors"
+                  >
+                    {expandedDerivation === m.id ? (
+                      <ChevronUp className="w-3 h-3" />
+                    ) : (
+                      <ChevronDown className="w-3 h-3" />
+                    )}
+                    Show statutory derivation
+                  </button>
+                  {expandedDerivation === m.id && (
+                    <div className="mt-1 p-2 rounded bg-black/40 border border-gray-800 text-[11px] text-gray-400 font-mono">
+                      {m.derivation ||
+                        "Standard prudential norms applied: DSCR = Operating Net Surplus / Debt Service Requirement."}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex items-center gap-2 text-gray-400 text-xs p-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Analyzing scheme parameters & credit data...</span>
+            </div>
+          )}
+
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Input Bar */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSend(input);
+          }}
+          className="mt-4 flex gap-2 items-center"
+        >
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask about schemes, instalments, or working capital..."
+              disabled={loading}
+              className="w-full bg-[#0d1117] border border-gray-800 rounded-xl px-10 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
+            />
+            <Mic className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
           </div>
 
-          {/* Input Box */}
-          <div className="p-4 border-t border-white/10 bg-zinc-900/90 rounded-b-2xl">
-            <div className="relative flex items-center">
-              <button
-                type="button"
-                className="absolute left-3.5 text-zinc-400 hover:text-white transition-colors"
-                title="Voice Input"
-              >
-                <Mic className="w-5 h-5" />
-              </button>
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                disabled={loading}
-                placeholder="Ask about schemes, instalments, or working capital..."
-                className="w-full bg-zinc-950/80 border border-white/10 rounded-xl pl-12 pr-12 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50 disabled:opacity-50"
-              />
-              <button
-                onClick={() => handleSend()}
-                disabled={!input.trim() || loading}
-                className="absolute right-2.5 p-2 rounded-lg bg-emerald-500 text-zinc-950 hover:bg-emerald-400 disabled:opacity-30 disabled:hover:bg-emerald-500 transition-all"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              </button>
-            </div>
-            <div className="flex items-center justify-between mt-2 px-1 text-[11px] text-zinc-500">
-              <span className="flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> PostgreSQL trigger rules validated
-              </span>
-              <span>FastAPI LangChain Agent</span>
-            </div>
-          </div>
+          <button
+            type="submit"
+            disabled={!input.trim() || loading}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white p-3 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center shrink-0"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </form>
+
+        {/* Footer Status Indicators */}
+        <div className="flex justify-between items-center text-[10px] text-gray-500 mt-2 px-1">
+          <span className="flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            PostgreSQL trigger rules validated
+          </span>
+          <span>FastAPI LangChain Agent</span>
         </div>
       </div>
-    </div>
+    </Shell>
   );
 }
