@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = "https://crazy-rooms-greet.loca.lt";
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -133,6 +133,11 @@ export async function api<T = any>(
     reqBody = JSON.stringify(reqBody);
   }
 
+  // Bypass Localtunnel reminder splash page for automated fetch requests
+  if (!headers.has("Bypass-Tunnel-Reminder")) {
+    headers.set("Bypass-Tunnel-Reminder", "true");
+  }
+
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -194,6 +199,7 @@ export async function askAdvisorStream(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Bypass-Tunnel-Reminder": "true",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({
@@ -208,6 +214,7 @@ export async function askAdvisorStream(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Bypass-Tunnel-Reminder": "true",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
