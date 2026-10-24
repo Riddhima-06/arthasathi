@@ -15,11 +15,44 @@ export interface SessionUser {
   district?: string;
   block?: string;
   panchayat?: string;
+  annual_family_income?: number;
 }
 
 export interface AuthResponse {
   access_token: string;
   user: SessionUser;
+}
+
+export interface CounterfactualResult {
+  viable: boolean;
+  dscr: number;
+  monthly_surplus: number;
+  max_safe_emi: number;
+  target_margin: number;
+  deficit?: number;
+  suggested_changes?: string[];
+  recommendation?: string;
+  [key: string]: any;
+}
+
+export interface AmortizationRow {
+  month: number;
+  beginning_balance: number;
+  emi: number;
+  principal: number;
+  interest: number;
+  ending_balance: number;
+}
+
+export interface LoanScheme {
+  id: string;
+  name: string;
+  target_beneficiary: string;
+  max_amount: number;
+  interest_rate: number;
+  tenure_months: number;
+  subsidy_pct: number;
+  promoter_margin_pct: number;
 }
 
 export const session = {
@@ -56,7 +89,6 @@ export const session = {
   },
 };
 
-// Allow body to be a plain object/any along with standard BodyInit
 export type CustomRequestInit = Omit<RequestInit, "body"> & {
   body?: any;
 };
