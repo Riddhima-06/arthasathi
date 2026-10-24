@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 
-const API_BASE = "https://crazy-rooms-greet.loca.lt";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -133,9 +134,12 @@ export async function api<T = any>(
     reqBody = JSON.stringify(reqBody);
   }
 
-  // Bypass Localtunnel reminder splash page for automated fetch requests
+  // Bypass both Localtunnel and ngrok interstitial splash pages
   if (!headers.has("Bypass-Tunnel-Reminder")) {
     headers.set("Bypass-Tunnel-Reminder", "true");
+  }
+  if (!headers.has("ngrok-skip-browser-warning")) {
+    headers.set("ngrok-skip-browser-warning", "true");
   }
 
   if (token && !headers.has("Authorization")) {
@@ -200,6 +204,7 @@ export async function askAdvisorStream(
     headers: {
       "Content-Type": "application/json",
       "Bypass-Tunnel-Reminder": "true",
+      "ngrok-skip-browser-warning": "true",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({
@@ -215,6 +220,7 @@ export async function askAdvisorStream(
       headers: {
         "Content-Type": "application/json",
         "Bypass-Tunnel-Reminder": "true",
+        "ngrok-skip-browser-warning": "true",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
