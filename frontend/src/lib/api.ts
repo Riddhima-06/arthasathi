@@ -1,3 +1,7 @@
+﻿"use client";
+
+import { useState, useEffect } from "react";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export interface ChatMessage {
@@ -32,6 +36,7 @@ export interface CounterfactualResult {
   deficit?: number;
   suggested_changes?: string[];
   recommendation?: string;
+  recommendations?: string[];
   [key: string]: any;
 }
 
@@ -60,7 +65,7 @@ export const session = {
     if (typeof window === "undefined") return null;
     return localStorage.getItem("token");
   },
-  setToken(token: string) {
+  setToken(token: string): void {
     if (typeof window !== "undefined") {
       localStorage.setItem("token", token);
     }
@@ -70,24 +75,36 @@ export const session = {
     const u = localStorage.getItem("user");
     return u ? JSON.parse(u) : null;
   },
-  setUser(user: SessionUser) {
+  setUser(user: SessionUser): void {
     if (typeof window !== "undefined") {
       localStorage.setItem("user", JSON.stringify(user));
     }
   },
-  save(data: { access_token: string; user?: SessionUser }) {
+  save(data: { access_token: string; user?: SessionUser }): void {
     if (typeof window !== "undefined") {
       if (data.access_token) localStorage.setItem("token", data.access_token);
       if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
     }
   },
-  clear() {
+  clear(): void {
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
     }
   },
 };
+
+export function useSession() {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setUser(session.getUser());
+    setReady(true);
+  }, []);
+
+  return { user, ready, loading: !ready, session };
+}
 
 export type CustomRequestInit = Omit<RequestInit, "body"> & {
   body?: any;
@@ -134,9 +151,6 @@ export async function api<T = any>(
   return res.json();
 }
 
-/**
- * Ensures a valid session token exists in localStorage using seed credentials.
- */
 export async function ensureDemoToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
   let token = session.getToken();
@@ -164,9 +178,6 @@ export async function ensureDemoToken(): Promise<string | null> {
   return null;
 }
 
-/**
- * Sends queries to the FastAPI /agent/chat LangChain endpoint.
- */
 export async function askAdvisorStream(
   messages: ChatMessage[],
   onChunk: (chunk: string) => void
